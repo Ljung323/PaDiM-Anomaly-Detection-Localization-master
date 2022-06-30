@@ -46,17 +46,17 @@ def main():
     test_outputs = OrderedDict([('layer1', []), ('layer2', []), ('layer3', [])])
 
     # extract train set features
-    # train_feature_filepath = '/Users/erika/PaDiM-Anomaly-Detection-Localization-master/mvtec_result/temp_resnet18/train_bottle.pkl'
+    # train_feature_filepath = '$HOME/PaDiM-Anomaly-Detection-Localization-master/mvtec_result/temp_resnet18/train_bottle.pkl'
     # with open(train_feature_filepath, 'rb') as f:
     #     train_outputs = pickle.load(f)
 
-    with open('/Users/erika/PaDiM-Anomaly-Detection-Localization-master/mean.pkl', 'rb') as f:
+    with open('$HOME/PaDiM-Anomaly-Detection-Localization-master/mean.pkl', 'rb') as f:
         loaded_mean = pickle.load(f)
-    with open('/Users/erika/PaDiM-Anomaly-Detection-Localization-master/cov_inv.pkl', 'rb') as f:
+    with open('$HOME/PaDiM-Anomaly-Detection-Localization-master/cov_inv.pkl', 'rb') as f:
         loaded_conv = pickle.load(f)
 
 
-    x = Image.open("/Users/erika/Desktop/004のコピー.png").convert('RGB')
+    x = Image.open("$HOME/Desktop/004のコピー.png").convert('RGB')
     start_time = time.time()
     transform = T.Compose([T.Resize(256, Image.ANTIALIAS),
                                       T.CenterCrop(224),

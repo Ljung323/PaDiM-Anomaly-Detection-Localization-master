@@ -146,10 +146,10 @@ def main():
                 for i in range(3136):
                     cov_inv[:, :, i] = np.linalg.inv(train_outputs[1][:, :, i])
 
-                with open('/Users/erika/PaDiM-Anomaly-Detection-Localization-master/mean.pkl', "wb") as f:
+                with open('$HOME/PaDiM-Anomaly-Detection-Localization-master/mean.pkl', "wb") as f:
                     pickle.dump(mean, f)
 
-                with open('/Users/erika/PaDiM-Anomaly-Detection-Localization-master/cov_inv.pkl', "wb") as f:
+                with open('$HOME/PaDiM-Anomaly-Detection-Localization-master/cov_inv.pkl', "wb") as f:
                     pickle.dump(cov_inv, f)
 
         gt_list = []
