@@ -1,3 +1,4 @@
+import time
 import random
 from random import sample
 import argparse
@@ -20,7 +21,7 @@ import matplotlib
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from torchvision.models import wide_resnet50_2, resnet18
+from torchvision.models import wide_resnet50_2, resnet18, mobilenet_v3_large, mobilenet_v3_small
 import datasets.mvtec as mvtec
 
 
@@ -33,7 +34,7 @@ def parse_args():
     parser = argparse.ArgumentParser('PaDiM')
     parser.add_argument('--data_path', type=str, default='D:/dataset/mvtec_anomaly_detection')
     parser.add_argument('--save_path', type=str, default='./mvtec_result')
-    parser.add_argument('--arch', type=str, choices=['resnet18', 'wide_resnet50_2'], default='wide_resnet50_2')
+    parser.add_argument('--arch', type=str, choices=['resnet18', 'wide_resnet50_2', 'mobilenet_v3_large', 'mobilenet_v3_small'], default='resnet18')
     return parser.parse_args()
 
 
@@ -50,6 +51,14 @@ def main():
         model = wide_resnet50_2(pretrained=True, progress=True)
         t_d = 1792
         d = 550
+    elif args.arch == 'mobilenet_v3_large':
+        model = mobilenet_v3_large(pretrained=True, progress=True)
+        t_d = 64
+        d = 32
+    elif args.arch == 'mobilenet_v3_small':
+        model = mobilenet_v3_small(pretrained=True, progress=True)
+        t_d = 64
+        d = 32
     model.to(device)
     model.eval()
     random.seed(1024)
@@ -65,9 +74,14 @@ def main():
     def hook(module, input, output):
         outputs.append(output)
 
-    model.layer1[-1].register_forward_hook(hook)
-    model.layer2[-1].register_forward_hook(hook)
-    model.layer3[-1].register_forward_hook(hook)
+    if args.arch == 'mobilenet_v3_large' or args.arch == 'mobilenet_v3_small':
+        model.features[1].block.register_forward_hook(hook)
+        model.features[2].block.register_forward_hook(hook)
+        model.features[3].block.register_forward_hook(hook)
+    else :
+        model.layer1[-1].register_forward_hook(hook)
+        model.layer2[-1].register_forward_hook(hook)
+        model.layer3[-1].register_forward_hook(hook)
 
     os.makedirs(os.path.join(args.save_path, 'temp_%s' % args.arch), exist_ok=True)
     fig, ax = plt.subplots(1, 2, figsize=(20, 10))
@@ -127,10 +141,22 @@ def main():
             with open(train_feature_filepath, 'rb') as f:
                 train_outputs = pickle.load(f)
 
+                mean = train_outputs[0]
+                cov_inv = torch.zeros(100, 100, 3136).numpy() # for resnet18
+                for i in range(3136):
+                    cov_inv[:, :, i] = np.linalg.inv(train_outputs[1][:, :, i])
+
+                with open('/Users/erika/PaDiM-Anomaly-Detection-Localization-master/mean.pkl', "wb") as f:
+                    pickle.dump(mean, f)
+
+                with open('/Users/erika/PaDiM-Anomaly-Detection-Localization-master/cov_inv.pkl', "wb") as f:
+                    pickle.dump(cov_inv, f)
+
         gt_list = []
         gt_mask_list = []
         test_imgs = []
 
+        start_time = time.time()
         # extract test set features
         for (x, y, mask) in tqdm(test_dataloader, '| feature extraction | test | %s |' % class_name):
             test_imgs.extend(x.cpu().detach().numpy())
@@ -161,8 +187,8 @@ def main():
         dist_list = []
         for i in range(H * W):
             mean = train_outputs[0][:, i]
-            conv_inv = np.linalg.inv(train_outputs[1][:, :, i])
-            dist = [mahalanobis(sample[:, i], mean, conv_inv) for sample in embedding_vectors]
+            cov_inv = np.linalg.inv(train_outputs[1][:, :, i])
+            dist = [mahalanobis(sample[:, i], mean, cov_inv) for sample in embedding_vectors]
             dist_list.append(dist)
 
         dist_list = np.array(dist_list).transpose(1, 0).reshape(B, H, W)
@@ -191,7 +217,7 @@ def main():
         fig_img_rocauc.plot(fpr, tpr, label='%s img_ROCAUC: %.3f' % (class_name, img_roc_auc))
         
         # get optimal threshold
-        gt_mask = np.asarray(gt_mask_list, dtype = int)
+        gt_mask = np.asarray(gt_mask_list)
         precision, recall, thresholds = precision_recall_curve(gt_mask.flatten(), scores.flatten())
         a = 2 * precision * recall
         b = precision + recall
@@ -208,6 +234,11 @@ def main():
         save_dir = args.save_path + '/' + f'pictures_{args.arch}'
         os.makedirs(save_dir, exist_ok=True)
         plot_fig(test_imgs, scores, gt_mask_list, threshold, save_dir, class_name)
+
+    print("---------")
+    print(f"Test images: {len(test_imgs)}")
+    print(f"Test took {time.time() - start_time} seconds")
+    print("---------")
 
     print('Average ROCAUC: %.3f' % np.mean(total_roc_auc))
     fig_img_rocauc.title.set_text('Average image ROCAUC: %.3f' % np.mean(total_roc_auc))
