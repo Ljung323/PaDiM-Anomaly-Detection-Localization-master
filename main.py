@@ -16,6 +16,7 @@ from skimage import morphology
 from skimage.segmentation import mark_boundaries
 import matplotlib.pyplot as plt
 import matplotlib
+from torchmetrics import IoU
 
 import torch
 import torch.nn.functional as F
@@ -208,6 +209,28 @@ def main():
         save_dir = args.save_path + '/' + f'pictures_{args.arch}'
         os.makedirs(save_dir, exist_ok=True)
         plot_fig(test_imgs, scores, gt_mask_list, threshold, save_dir, class_name)
+
+        prediction = torch.Tensor()
+        for i in range(len(scores)):
+            mask = scores[i]
+            mask[mask > threshold] = 1
+            mask[mask <= threshold] = 0
+            kernel = morphology.disk(4)
+            mask = morphology.opening(mask, kernel)
+            mask = torch.from_numpy(mask)
+            mask = torch.unsqueeze(mask, 0)
+            prediction = torch.cat((prediction, mask))
+
+        target = torch.from_numpy(np.asarray(gt_mask_list))
+        target = torch.squeeze(target, 1)
+
+        jaccard = IoU(num_classes=2, reduction="none")
+        iou_per_class = jaccard(prediction.int(), target.int())
+        print(iou_per_class)
+
+        jaccard = IoU(num_classes=2)
+        m_iou = jaccard(prediction.int(), target.int())
+        print(m_iou)
 
     print('Average ROCAUC: %.3f' % np.mean(total_roc_auc))
     fig_img_rocauc.title.set_text('Average image ROCAUC: %.3f' % np.mean(total_roc_auc))
